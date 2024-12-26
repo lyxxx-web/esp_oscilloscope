@@ -8,7 +8,6 @@
 #include "bsp/esp-bsp.h"
 #include "bsp/display.h"
 #include "ui/ui.h"
-#include "ui_extend.h"
 
 static const char *TAG = "main";
 #define CUSTOM_CONFIG() \
@@ -38,7 +37,6 @@ esp_err_t app_animation_start(void)
     /* Add and show objects on display*/
     bsp_display_lock(0);
     ui_init();
-    ui_extend_init();
     bsp_display_unlock();
     return ESP_OK;
 }
