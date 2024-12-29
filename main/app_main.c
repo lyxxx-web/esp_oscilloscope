@@ -10,6 +10,7 @@
 #include "ui/ui.h"
 
 static const char *TAG = "main";
+
 #define CUSTOM_CONFIG() \
     {                               \
         .task_priority = 4,       \
@@ -43,5 +44,34 @@ esp_err_t app_animation_start(void)
 void app_main(void)
 {
     app_animation_start();
-
+    //test show
+    param_packge_t data_window ={
+        .current_average = 200,
+        .current_max = 400,
+        .current_min = 100,
+        .time = 20,
+        .power = 34,
+        .energy = 55,
+        .current_average_unit = 1,
+        .current_max_unit = 1,
+        .current_min_unit = 0,
+        .energy_unit = 1,
+        .power_unit = 0,
+        .time_unit = 1
+    };
+    param_packge_t data_select ={
+        .current_average = 200,
+        .current_max = 400,
+        .current_min = 100,
+        .time = 20,
+        .power = 34,
+        .energy = 55,
+        .current_average_unit = 1,
+        .current_max_unit = 1,
+        .current_min_unit = 0,
+        .energy_unit = 1,
+        .power_unit = 0,
+        .time_unit = 1
+    };
+    ui_set_calc_param(data_window, data_select);
 }
