@@ -34,7 +34,14 @@ typedef struct
     uint8_t power_unit: 1;/*1: unit set to W; 0: uint set to mW*/
     uint8_t energy_unit: 1;/*1: unit set to mWh; 0: uint set to uWh*/
 
-} param_packge_t;
+} current_data_t;
+
+typedef struct
+{
+    lv_coord_t cursor_start;
+    lv_coord_t cursor_end;
+
+} chart_cursor_interval_t;
 
 /**
  * @param value_init slider vsup value after init
@@ -45,10 +52,32 @@ void ui_set_sample_time_range(int value_min, int value_max, int value_init);
 
 /**
  * @brief set the param data in the display_panel
- * @param windows_param current data caclculate between two cursors
- * @param select_param current data select by one cursor
+ * @param windows_data current data caclculate between two cursors
+ * @param select_data current data select by one cursor
  */
-void ui_set_calc_param(param_packge_t windows_param, param_packge_t select_param);
+void ui_set_current_data(current_data_t windows_data, current_data_t select_data);
+
+/**
+ * @brief update the y_points buffer of chart then refresh chart
+ */
+void ui_chart_send_y_points(lv_coord_t * data_buffer, size_t buffer_size);
+
+/**
+ * @brief use external buffer as the y_points buffer
+ */
+void ui_chart_set_ext_y_array(lv_coord_t * ext_y_buffer, size_t buffer_size);
+
+/**
+ * @brief refresh chart data
+ * @attention refresh data regularly if set external buffer
+ */
+void ui_chart_data_refresh(void);
+
+/**
+ * @brief get cursor point_id both start and end
+ */
+chart_cursor_interval_t ui_get_chart_window_start_end(void);
+
 void ui_init(void);
 
 #ifdef __cplusplus

@@ -16,9 +16,9 @@
 #define ui_panel_left_option_grow 2
 #define PI 3.1415926535897932384626433832795f
 #define CHART_HEIGHT    400
-#define CHART_WIDTH     760
+#define CHART_WIDTH     750
 #define CUSTOM_WIDTH1   150
-#define NUM_SAMPLES     1000 
+#define CHART_POINTS_COUNT     1000
 
 /**********************
  *  STATIC VARIABLES
@@ -27,8 +27,10 @@ static const char *TAG = "ui_screen_home";
 static lv_obj_t * ui_ScreenHome_PanelDisp_KbNumpad;
 static lv_obj_t * ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[LABEL_ARRAY_SIZE];
 static lv_obj_t * ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[LABEL_ARRAY_SIZE];
+static lv_obj_t * ui_ScreenHome_PanelDisp_ChartDisp;
 static lv_timer_t * g_timer_update;
-static lv_coord_t y_points[NUM_SAMPLES];
+static lv_coord_t g_chart_y_points[CHART_POINTS_COUNT];
+static chart_cursor_t chart_cursor;
 static slider_range g_slider_vsup = {
     .max = 5000,
     .min = 0,
@@ -52,11 +54,10 @@ static const char * btnm_map[] = {"1", "2", "3", "\n",
 /**********************
  *  STATIC PROTOTYPES
  **********************/
-static void generate_sine_wave(lv_coord_t *y_points);
+static void generate_sine_wave(lv_coord_t *g_chart_y_points);
 static void format_textarea_string(int min_value, int max_value, char * input_str, size_t buf_size);
 static uint8_t detect_touch_cursor(int32_t pos_id, lv_chart_cursor_t * cursor1, lv_chart_cursor_t * cursor2);
 static void add_chart_data_cb(lv_timer_t * t);
-
 static void ui_event_chart_cb(lv_event_t * e);
 static void ui_event_textarea_cb(lv_event_t * e);
 static void ui_event_kbnumpad_cb(lv_event_t * e);
@@ -65,70 +66,139 @@ static void ui_event_slider_voltage_cb(lv_event_t * e);
 static void ui_event_slider_samp_freq_cb(lv_event_t * e);
 static void ui_event_slider_samp_time_cb(lv_event_t * e);
 static void ui_event_button_start_cb(lv_event_t * e);
-
+static void add_chart_data_cb2(lv_timer_t * t);
 /**********************
  *   GLOBAL FUNCTIONS
  **********************/
-void ui_set_vsup_range(int value_min, int value_max, int value_init) 
+chart_cursor_interval_t ui_get_chart_window_start_end(void)
+{
+    chart_cursor_interval_t cursor_interval;
+    lv_chart_series_t * ser = lv_chart_get_series_next(ui_ScreenHome_PanelDisp_ChartDisp, NULL);
+    lv_coord_t id1, id2;
+    id1 = chart_cursor.cursor1->point_id;
+    id2 = chart_cursor.cursor2->point_id;
+    uint16_t start_id = lv_chart_get_x_start_point(ui_ScreenHome_PanelDisp_ChartDisp, ser);
+    uint16_t point_count = lv_chart_get_point_count(ui_ScreenHome_PanelDisp_ChartDisp);
+    id1 = (id1 + start_id) %  point_count;
+    id2 = (id2 + start_id) %  point_count;
+    if (id1 < id2) {
+        cursor_interval.cursor_start = (id1 + start_id) %  point_count;
+        cursor_interval.cursor_end = (id2 + start_id) %  point_count;
+    } else {
+        cursor_interval.cursor_start = (id2 + start_id) %  point_count;
+        cursor_interval.cursor_end = (id1 + start_id) %  point_count;
+    }
+    return cursor_interval;
+}
+
+void ui_chart_data_refresh(void)
+{
+    lv_chart_refresh(ui_ScreenHome_PanelDisp_ChartDisp);
+    lv_chart_series_t * ser = lv_chart_get_series_next(ui_ScreenHome_PanelDisp_ChartDisp, NULL);
+    lv_coord_t * y_point_buf = lv_chart_get_y_array(ui_ScreenHome_PanelDisp_ChartDisp, ser);
+    lv_coord_t max,min;
+    max = y_point_buf[0];
+    min = y_point_buf[0];
+    for (size_t i = 0; i < CHART_POINTS_COUNT; i++) {
+        lv_coord_t temp = y_point_buf[i];
+        if (temp > max)
+            max = temp;
+        else if (temp < min)
+            min = temp;
+    }
+    max++;
+    min--;
+    max = max * 1.2;
+    min = min * 1.2;
+    lv_chart_set_range(ui_ScreenHome_PanelDisp_ChartDisp, LV_CHART_AXIS_PRIMARY_Y, min, max);
+}
+
+void ui_chart_set_ext_y_array(lv_coord_t * ext_y_buffer, size_t buffer_size)
+{
+    if (buffer_size != CHART_POINTS_COUNT) 
+        return;
+    lv_chart_series_t * ser = lv_chart_get_series_next(ui_ScreenHome_PanelDisp_ChartDisp, NULL);
+    lv_chart_set_ext_y_array(ui_ScreenHome_PanelDisp_ChartDisp, ser, ext_y_buffer);
+}
+
+void ui_chart_send_y_points(lv_coord_t * data_buffer, size_t buffer_size)
+{
+    if (buffer_size != CHART_POINTS_COUNT) 
+        return;
+    memcpy(g_chart_y_points, data_buffer, buffer_size);
+    lv_chart_refresh(ui_ScreenHome_PanelDisp_ChartDisp);
+    lv_coord_t max,min;
+    for (size_t i = 0; i < buffer_size; i++) {
+        max = g_chart_y_points[0];
+        min = g_chart_y_points[0];
+        if (g_chart_y_points[i] > max)
+            max = g_chart_y_points[i];
+        else if (g_chart_y_points[i] < min)
+            min = g_chart_y_points[i];
+    }
+    lv_chart_set_range(ui_ScreenHome_PanelDisp_ChartDisp, LV_CHART_AXIS_PRIMARY_Y, min, max);
+}
+
+void ui_set_vsup_range(int value_min, int value_max, int value_init)
 {
     g_slider_vsup.min = value_min;
     g_slider_vsup.max = value_max;
     g_slider_vsup.init_value = value_init;
 }
 
-void ui_set_sample_freq_range(int value_min, int value_max, int value_init) 
+void ui_set_sample_freq_range(int value_min, int value_max, int value_init)
 {
     g_slider_freq.min = value_min;
     g_slider_freq.max = value_max;
     g_slider_freq.init_value = value_init;
 }
 
-void ui_set_sample_time_range(int value_min, int value_max, int value_init) 
+void ui_set_sample_time_range(int value_min, int value_max, int value_init)
 {
     g_slider_ts.min = value_min;
     g_slider_ts.max = value_max;
     g_slider_ts.init_value = value_init;
 }
 
-void ui_set_calc_param(param_packge_t windows_param, param_packge_t select_param)
+void ui_set_current_data(current_data_t windows_data, current_data_t select_data)
 {
-    if (windows_param.current_average_unit)
-        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[0], "%d\nmA\nAverage", windows_param.current_average);
-    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[0], "%d\nuA\nAverage", windows_param.current_average);
-    if (windows_param.current_max_unit)
-        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[1], "%d\nmA\nMax", windows_param.current_max);
-    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[1], "%d\nuA\nMax", windows_param.current_max);
-    if (windows_param.current_min_unit)
-        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[2], "%d\nmA\nMin", windows_param.current_min);
-    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[2], "%d\nuA\nMin", windows_param.current_min);
-    if (windows_param.time_unit)
-        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[3], "%d\nsec\nTime", windows_param.time);
-    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[3], "%d\nms\nTime", windows_param.time); 
-    if (windows_param.power_unit)
-        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[4], "%d\nW\nPower", windows_param.power);
-    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[4], "%d\nmW\nPower", windows_param.power);
-    if (windows_param.energy_unit)
-        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[5], "%d\nmWh\nEnergy", windows_param.energy);
-    else  lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[5], "%d\nuWh\nEnergy", windows_param.energy);
+    if (windows_data.current_average_unit)
+        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[0], "%d\nmA\nAverage", windows_data.current_average);
+    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[0], "%d\nuA\nAverage", windows_data.current_average);
+    if (windows_data.current_max_unit)
+        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[1], "%d\nmA\nMax", windows_data.current_max);
+    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[1], "%d\nuA\nMax", windows_data.current_max);
+    if (windows_data.current_min_unit)
+        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[2], "%d\nmA\nMin", windows_data.current_min);
+    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[2], "%d\nuA\nMin", windows_data.current_min);
+    if (windows_data.time_unit)
+        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[3], "%d\nsec\nTime", windows_data.time);
+    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[3], "%d\nms\nTime", windows_data.time); 
+    if (windows_data.power_unit)
+        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[4], "%d\nW\nPower", windows_data.power);
+    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[4], "%d\nmW\nPower", windows_data.power);
+    if (windows_data.energy_unit)
+        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[5], "%d\nmWh\nEnergy", windows_data.energy);
+    else  lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[5], "%d\nuWh\nEnergy", windows_data.energy);
 
-    if (select_param.current_average_unit)
-        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[0], "%d\nmA\nAverage", select_param.current_average);
-    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[0], "%d\nuA\nAverage", select_param.current_average);
-    if (select_param.current_max_unit)
-        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[1], "%d\nmA\nMax", select_param.current_max);
-    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[1], "%d\nuA\nMax", select_param.current_max);
-    if (select_param.current_min_unit)
-        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[2], "%d\nmA\nMin", select_param.current_min);
-    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[2], "%d\nuA\nMin", select_param.current_min);
-    if (select_param.time_unit)
-        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[3], "%d\nsec\nTime", select_param.time);
-    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[3], "%d\nms\nTime", select_param.time); 
-    if (select_param.power_unit)
-        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[4], "%d\nW\nPower", select_param.time);
-    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[4], "%d\nmW\nPower", select_param.time);
-    if (select_param.energy_unit)
-        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[5], "%d\nmWh\nEnergy", select_param.energy);
-    else  lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[5], "%d\nuWh\nEnergy", select_param.energy);
+    if (select_data.current_average_unit)
+        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[0], "%d\nmA\nAverage", select_data.current_average);
+    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[0], "%d\nuA\nAverage", select_data.current_average);
+    if (select_data.current_max_unit)
+        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[1], "%d\nmA\nMax", select_data.current_max);
+    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[1], "%d\nuA\nMax", select_data.current_max);
+    if (select_data.current_min_unit)
+        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[2], "%d\nmA\nMin", select_data.current_min);
+    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[2], "%d\nuA\nMin", select_data.current_min);
+    if (select_data.time_unit)
+        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[3], "%d\nsec\nTime", select_data.time);
+    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[3], "%d\nms\nTime", select_data.time); 
+    if (select_data.power_unit)
+        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[4], "%d\nW\nPower", select_data.time);
+    else lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[4], "%d\nmW\nPower", select_data.time);
+    if (select_data.energy_unit)
+        lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[5], "%d\nmWh\nEnergy", select_data.energy);
+    else  lv_label_set_text_fmt(ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[5], "%d\nuWh\nEnergy", select_data.energy);
 
 }
 /* Screen init */
@@ -336,7 +406,7 @@ lv_obj_t * ui_screen_home_init(void)
     lv_obj_set_height(ui_ScreenHome_PanelDisp, LV_VER_RES);
     lv_obj_set_flex_grow(ui_ScreenHome_PanelDisp, ui_panel_disp_grow);
 
-    lv_obj_t * ui_ScreenHome_PanelDisp_ChartDisp = lv_chart_create(ui_ScreenHome_PanelDisp);
+    ui_ScreenHome_PanelDisp_ChartDisp = lv_chart_create(ui_ScreenHome_PanelDisp);
     lv_chart_set_update_mode(ui_ScreenHome_PanelDisp_ChartDisp, LV_CHART_UPDATE_MODE_SHIFT);
     lv_obj_set_style_radius(ui_ScreenHome_PanelDisp_ChartDisp, 10, 0);
     lv_obj_set_style_bg_opa(ui_ScreenHome_PanelDisp_ChartDisp, 0, 0);
@@ -348,25 +418,29 @@ lv_obj_t * ui_screen_home_init(void)
     lv_obj_set_style_line_color(ui_ScreenHome_PanelDisp_ChartDisp, lv_color_hex(0xFFFFFF), LV_PART_TICKS | LV_STATE_DEFAULT);
     lv_obj_set_size(ui_ScreenHome_PanelDisp_ChartDisp, CHART_WIDTH, CHART_HEIGHT);
     lv_obj_align(ui_ScreenHome_PanelDisp_ChartDisp, LV_ALIGN_RIGHT_MID, 0, -20);
-    lv_chart_set_point_count(ui_ScreenHome_PanelDisp_ChartDisp, NUM_SAMPLES);
+    lv_chart_set_point_count(ui_ScreenHome_PanelDisp_ChartDisp, CHART_POINTS_COUNT);
     // lv_chart_set_zoom_x(ui_ScreenHome_PanelDisp_ChartDisp, 256 * 2);
     lv_chart_set_div_line_count(ui_ScreenHome_PanelDisp_ChartDisp, 6, 6);
-    lv_chart_set_range(ui_ScreenHome_PanelDisp_ChartDisp, LV_CHART_AXIS_PRIMARY_Y, -120, 120);
-    static chart_cursor_t chart_cusor;
-    chart_cusor.cursor1 = lv_chart_add_cursor(ui_ScreenHome_PanelDisp_ChartDisp, lv_palette_main(LV_PALETTE_YELLOW), LV_DIR_LEFT | LV_DIR_BOTTOM);
-    chart_cusor.cursor2 = lv_chart_add_cursor(ui_ScreenHome_PanelDisp_ChartDisp, lv_palette_main(LV_PALETTE_YELLOW), LV_DIR_LEFT | LV_DIR_BOTTOM);
+    // lv_chart_set_range(ui_ScreenHome_PanelDisp_ChartDisp, LV_CHART_AXIS_PRIMARY_Y, -120, 120);
+    chart_cursor.cursor1 = lv_chart_add_cursor(ui_ScreenHome_PanelDisp_ChartDisp, lv_palette_main(LV_PALETTE_YELLOW), LV_DIR_LEFT | LV_DIR_BOTTOM);
+    chart_cursor.cursor2 = lv_chart_add_cursor(ui_ScreenHome_PanelDisp_ChartDisp, lv_palette_main(LV_PALETTE_YELLOW), LV_DIR_LEFT | LV_DIR_BOTTOM);
 
     /*Prefill with data*/
-    generate_sine_wave(y_points);
+    generate_sine_wave(g_chart_y_points);
     lv_chart_series_t * ui_chart_series = lv_chart_add_series(ui_ScreenHome_PanelDisp_ChartDisp, lv_palette_main(LV_PALETTE_RED), LV_CHART_AXIS_PRIMARY_Y);
-    for(size_t i = 0; i < NUM_SAMPLES; i++) {
-        lv_chart_set_next_value(ui_ScreenHome_PanelDisp_ChartDisp, ui_chart_series, y_points[i]);
-    }
-    lv_chart_set_cursor_point(ui_ScreenHome_PanelDisp_ChartDisp, chart_cusor.cursor1, ui_chart_series, 200);
-    lv_chart_set_cursor_point(ui_ScreenHome_PanelDisp_ChartDisp, chart_cusor.cursor2, ui_chart_series, 600);
+    lv_chart_set_ext_y_array(ui_ScreenHome_PanelDisp_ChartDisp, ui_chart_series, g_chart_y_points);
+
+    lv_chart_set_cursor_point(ui_ScreenHome_PanelDisp_ChartDisp, chart_cursor.cursor1, ui_chart_series, 200);
+    lv_chart_set_cursor_point(ui_ScreenHome_PanelDisp_ChartDisp, chart_cursor.cursor2, ui_chart_series, 600);
 
     lv_chart_set_axis_tick(ui_ScreenHome_PanelDisp_ChartDisp, LV_CHART_AXIS_PRIMARY_Y, 10, 5, 6, 5, true, 50);
     lv_chart_set_axis_tick(ui_ScreenHome_PanelDisp_ChartDisp, LV_CHART_AXIS_PRIMARY_X, 10, 5, 20, 5, true, 50);
+    ui_chart_data_refresh();
+
+    lv_obj_t * ui_ScreenHome_PanelDisp_ChartDisp_LabelYaxis = lv_label_create(ui_ScreenHome_PanelDisp_ChartDisp);
+    lv_label_set_text(ui_ScreenHome_PanelDisp_ChartDisp_LabelYaxis, "y/0.1mA");
+    lv_obj_set_style_text_color(ui_ScreenHome_PanelDisp_ChartDisp_LabelYaxis, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_align(ui_ScreenHome_PanelDisp_ChartDisp_LabelYaxis, LV_ALIGN_TOP_LEFT, 0, 0);
 
     static lv_btnmatrix_ctrl_t default_kb_ctrl_num_map[] = {
         NUMPAD_CTRL_BTN_FLAGS, NUMPAD_CTRL_BTN_FLAGS, NUMPAD_CTRL_BTN_FLAGS,
@@ -550,7 +624,7 @@ lv_obj_t * ui_screen_home_init(void)
     lv_obj_add_event_cb(ui_ScreenHome_PanelFunc_PanelMode_PanelVsup_TextareaVsup, ui_event_textarea_cb, LV_EVENT_ALL, ui_ScreenHome_PanelFunc_PanelMode_SliderVsup);
     lv_obj_add_event_cb(ui_ScreenHome_PanelFunc_PanelOption_ButtonStart, ui_event_button_start_cb, LV_EVENT_VALUE_CHANGED, ui_ScreenHome_PanelFunc_PanelOption_ButtonStart_LabelMark);
     lv_obj_add_event_cb(ui_ScreenHome_PanelFunc_PanelParam_PanelTs_TextareaTs, ui_event_textarea_cb, LV_EVENT_ALL, ui_ScreenHome_PanelFunc_PanelParam_SliderTs);
-    lv_obj_add_event_cb(ui_ScreenHome_PanelDisp_ChartDisp, ui_event_chart_cb, LV_EVENT_ALL, &chart_cusor);
+    lv_obj_add_event_cb(ui_ScreenHome_PanelDisp_ChartDisp, ui_event_chart_cb, LV_EVENT_ALL, &chart_cursor);
 
     return ui_ScreenHome;
 }
@@ -559,10 +633,10 @@ lv_obj_t * ui_screen_home_init(void)
  *   STATIC FUNCTIONS
  **********************/
 
-static void generate_sine_wave(lv_coord_t *y_points) 
+static void generate_sine_wave(lv_coord_t *g_chart_y_points) 
 {
-    for (int i = 0; i < NUM_SAMPLES; i++) {
-        y_points[i] = (lv_coord_t)(100 * sin(2 * PI * i / NUM_SAMPLES));
+    for (int i = 0; i < CHART_POINTS_COUNT; i++) {
+        g_chart_y_points[i] = (lv_coord_t)(1000 * sin(2 * PI * i / CHART_POINTS_COUNT)) + 200;
     }
 }
 
@@ -570,12 +644,39 @@ static void add_chart_data_cb(lv_timer_t * t)
 {
     lv_obj_t * chart = (lv_obj_t *)t->user_data;
     lv_chart_series_t * ser = lv_chart_get_series_next(chart, NULL);
-    static int i = 0;
-    lv_chart_set_next_value(chart, ser, y_points[i]);
-    i++;
-    if (i >= NUM_SAMPLES)
-        i = 0;
+    uint16_t point_count = lv_chart_get_point_count(chart);
+    for (size_t i = 0; i < CHART_POINTS_COUNT; i++)
+    {
+        uint16_t x_start = lv_chart_get_x_start_point(chart, ser);
+        uint16_t temp;
+        if (i == 0)
+            temp = x_start;
+        if (i != CHART_POINTS_COUNT - 1) {
+            ser->y_points[x_start] = ser->y_points[x_start + 1];
+            ser->start_point = (ser->start_point + 1) % point_count;
+        }
+        else {
+            ser->y_points[x_start] = ser->y_points[temp];
+            ser->start_point = (ser->start_point + 1) % point_count;
+        }
+    }
     lv_chart_refresh(chart);
+}
+
+static void add_chart_data_cb2(lv_timer_t * t)
+{
+    lv_obj_t * chart = (lv_obj_t *)t->user_data;
+    lv_chart_series_t * ser = lv_chart_get_series_next(chart, NULL);
+    uint16_t point_count = lv_chart_get_point_count(chart);
+    static int j = 0;
+    for (size_t i = 0; i < CHART_POINTS_COUNT; i++)
+    {
+        // ser->y_points[i] = lv_rand(10, 90);
+        ser->y_points[i] = (j + i) % 510;
+    }
+    j = (j + 10) % 500;
+    // lv_chart_refresh(chart);
+    ui_chart_data_refresh();
 }
 
 static void format_textarea_string(int min_value, int max_value, char * input_str, size_t buf_size)
@@ -623,7 +724,7 @@ static void ui_event_chart_cb(lv_event_t * e)
 {
     lv_event_code_t code = lv_event_get_code(e);
     lv_obj_t * chart = lv_event_get_target(e);
-    chart_cursor_t * chart_cursor = lv_event_get_user_data(e);
+    chart_cursor_t * cursor = lv_event_get_user_data(e);
     static int id1 = -1;
     static int id2 = -1;
     static uint8_t set_cursor_flag = 0;
@@ -632,7 +733,7 @@ static void ui_event_chart_cb(lv_event_t * e)
         // Detect which cursor is touched when first press
         if (!press_flag) {
             int32_t touch_id = lv_chart_get_pressed_point(chart);
-            set_cursor_flag = detect_touch_cursor(touch_id, chart_cursor->cursor1, chart_cursor->cursor2);
+            set_cursor_flag = detect_touch_cursor(touch_id, cursor->cursor1, cursor->cursor2);
             press_flag = true;
         }
         // Set the cursor position via param set_cursor_flag
@@ -645,11 +746,11 @@ static void ui_event_chart_cb(lv_event_t * e)
             uint16_t point_count = lv_chart_get_point_count(chart);
             lv_coord_t width = lv_obj_get_width(chart);
             if (set_cursor_flag == 1) {
-                int32_t last_id = chart_cursor->cursor1->point_id + vect.x * point_count / width;
-                lv_chart_set_cursor_point(chart, chart_cursor->cursor1, NULL, last_id);
+                int32_t last_id = cursor->cursor1->point_id + vect.x * point_count / width;
+                lv_chart_set_cursor_point(chart, cursor->cursor1, NULL, last_id);
             } else {
-                int32_t last_id = chart_cursor->cursor2->point_id + vect.x * point_count / width;
-                lv_chart_set_cursor_point(chart, chart_cursor->cursor2, NULL, last_id);
+                int32_t last_id = cursor->cursor2->point_id + vect.x * point_count / width;
+                lv_chart_set_cursor_point(chart, cursor->cursor2, NULL, last_id);
             }     
         }
     }
@@ -666,8 +767,8 @@ static void ui_event_chart_cb(lv_event_t * e)
 
         static int index = 0;//mark which cursor being painted
         // Adjust the data point_id based on the start_id
-        id1 = chart_cursor->cursor1->point_id;
-        id2 = chart_cursor->cursor2->point_id;
+        id1 = cursor->cursor1->point_id;
+        id2 = cursor->cursor2->point_id;
         uint16_t start_id = lv_chart_get_x_start_point(chart, ser);
         uint16_t point_count = lv_chart_get_point_count(chart);
         id1 = (id1 + start_id) %  point_count;
@@ -675,12 +776,12 @@ static void ui_event_chart_cb(lv_event_t * e)
 
         if(dsc->p1 == NULL || dsc->p2 == NULL || dsc->p1->y != dsc->p2->y || id1 < 0 || id2 < 0) return;
 
-        lv_coord_t v1 = data_array[id1];
-        lv_coord_t v2 = data_array[id2];
+        float v1 = data_array[id1] / (float)10;
+        float v2 = data_array[id2] / (float)10;
 
         char buf1[10], buf2[10];
-        lv_snprintf(buf1, sizeof(buf1), "%d", v1);
-        lv_snprintf(buf2, sizeof(buf2), "%d", v2);
+        snprintf(buf1, sizeof(buf1), "%.1f", v1);
+        snprintf(buf2, sizeof(buf2), "%.1f", v2);
 
         lv_point_t size1, size2;
         lv_txt_get_size(&size1, buf1, LV_FONT_DEFAULT, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
@@ -804,7 +905,7 @@ static void ui_event_screen_home_cb(lv_event_t * e)
     lv_event_code_t event_code = lv_event_get_code(e);
     lv_obj_t * chart = lv_event_get_user_data(e);
     if (event_code == LV_EVENT_SCREEN_LOAD_START) {
-        g_timer_update = lv_timer_create(add_chart_data_cb, 1, chart);
+        g_timer_update = lv_timer_create(add_chart_data_cb2, 30, chart);
     }
 }
 
