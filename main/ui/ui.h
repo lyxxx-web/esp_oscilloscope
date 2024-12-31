@@ -69,7 +69,7 @@ void ui_chart_set_ext_y_array(lv_coord_t * ext_y_buffer, size_t buffer_size);
 
 /**
  * @brief refresh chart data
- * @attention refresh data regularly if set external buffer
+ * @attention refresh data regularly if set external y array buffer
  */
 void ui_chart_data_refresh(void);
 
