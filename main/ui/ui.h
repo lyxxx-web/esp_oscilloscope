@@ -47,6 +47,11 @@ typedef struct
  * @param value_init slider vsup value after init
  */
 void ui_set_vsup_range(int value_min, int value_max, int value_init);
+
+/**
+ * @param value_init slider vsup value after init
+ * @attention Must be a multiple of 10000
+ */
 void ui_set_sample_freq_range(int value_min, int value_max, int value_init);
 void ui_set_sample_time_range(int value_min, int value_max, int value_init);
 

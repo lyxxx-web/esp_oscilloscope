@@ -167,8 +167,8 @@ void ui_set_sample_freq_range(int value_min, int value_max, int value_init)
     g_slider_freq.min = value_min;
     g_slider_freq.max = value_max;
     g_slider_freq.init_value = value_init;
-    lv_label_set_text_fmt(ui_ScreenHome_PanelFunc_PanelParam_LabelSubtitle1, "SR(Hz):\t\t\t\t%d", g_slider_freq.init_value);
-    lv_slider_set_range(ui_ScreenHome_PanelFunc_PanelParam_SliderFreq, g_slider_freq.min, g_slider_freq.max);
+    lv_label_set_text_fmt(ui_ScreenHome_PanelFunc_PanelParam_LabelSubtitle1, "SR(Hz):\t\t\t\t%d", g_slider_freq.init_value / 10000);
+    lv_slider_set_range(ui_ScreenHome_PanelFunc_PanelParam_SliderFreq, g_slider_freq.min / 10000, g_slider_freq.max / 10000);
     lv_slider_set_value(ui_ScreenHome_PanelFunc_PanelParam_SliderFreq, g_slider_freq.init_value, LV_ANIM_OFF);
 
 }
@@ -355,8 +355,8 @@ lv_obj_t * ui_screen_home_init(void)
     lv_obj_set_style_pad_ver(ui_ScreenHome_PanelFunc_PanelParam_LabelSubtitle1, 7, 0);
 
     ui_ScreenHome_PanelFunc_PanelParam_SliderFreq = lv_slider_create(ui_ScreenHome_PanelFunc_PanelParam);
-    lv_slider_set_range(ui_ScreenHome_PanelFunc_PanelParam_SliderFreq, g_slider_freq.min, g_slider_freq.max);
-    lv_slider_set_value(ui_ScreenHome_PanelFunc_PanelParam_SliderFreq, g_slider_freq.init_value, LV_ANIM_OFF);
+    lv_slider_set_range(ui_ScreenHome_PanelFunc_PanelParam_SliderFreq, g_slider_freq.min / 10000, g_slider_freq.max / 10000);
+    lv_slider_set_value(ui_ScreenHome_PanelFunc_PanelParam_SliderFreq, g_slider_freq.init_value / 10000, LV_ANIM_OFF);
     lv_obj_set_width(ui_ScreenHome_PanelFunc_PanelParam_SliderFreq, CUSTOM_WIDTH1);
     lv_obj_set_height(ui_ScreenHome_PanelFunc_PanelParam_SliderFreq, 10);
     lv_obj_set_style_bg_color(ui_ScreenHome_PanelFunc_PanelParam_SliderFreq, lv_color_hex(0X455A64), LV_PART_KNOB | LV_STATE_DEFAULT);
@@ -992,7 +992,7 @@ static void ui_event_slider_samp_freq_cb(lv_event_t * e)
     lv_obj_t * slider = lv_event_get_target(e);
     lv_obj_t * ta = lv_event_get_user_data(e);
     char buf[20];
-    snprintf(buf, sizeof(buf), "SR(Hz):\t\t\t\t%d", (int)lv_slider_get_value(slider));
+    snprintf(buf, sizeof(buf), "SR(Hz):\t\t\t\t%d", (int)lv_slider_get_value(slider) * 10000);
     lv_label_set_text(ta, buf);
 }
 
