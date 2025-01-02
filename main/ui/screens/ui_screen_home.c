@@ -32,6 +32,8 @@ static lv_obj_t * ui_ScreenHome_PanelFunc_PanelParam_SliderTs;
 static lv_obj_t * ui_ScreenHome_PanelDisp_PanelData_PanelWindow_LabelContent[LABEL_ARRAY_SIZE];
 static lv_obj_t * ui_ScreenHome_PanelDisp_PanelData_PanelSelect_LabelContent[LABEL_ARRAY_SIZE];
 static lv_obj_t * ui_ScreenHome_PanelDisp_ChartDisp;
+static lv_obj_t * ui_ScreenHome_PanelDisp_PanelData;
+static lv_obj_t * ui_ScreenHome_PanelDisp_PanelOption;
 static lv_timer_t * g_timer_update;
 static lv_coord_t g_chart_y_points[CHART_POINTS_COUNT];
 static chart_cursor_t chart_cursor;
@@ -74,6 +76,7 @@ static void ui_event_slider_samp_freq_cb(lv_event_t * e);
 static void ui_event_slider_samp_time_cb(lv_event_t * e);
 static void ui_event_button_start_cb(lv_event_t * e);
 static void ui_event_switch_locky_cb(lv_event_t * e);
+static void ui_event_Buttonshift_cb(lv_event_t * e);
 /**********************
  *   GLOBAL FUNCTIONS
  **********************/
@@ -124,7 +127,7 @@ void ui_chart_data_refresh(void)
 
 void ui_chart_set_ext_y_array(lv_coord_t * ext_y_buffer, size_t buffer_size)
 {
-    if (buffer_size != CHART_POINTS_COUNT) 
+    if (buffer_size != CHART_POINTS_COUNT)
         return;
     lv_chart_series_t * ser = lv_chart_get_series_next(ui_ScreenHome_PanelDisp_ChartDisp, NULL);
     lv_chart_set_ext_y_array(ui_ScreenHome_PanelDisp_ChartDisp, ser, ext_y_buffer);
@@ -229,6 +232,7 @@ lv_obj_t * ui_screen_home_init(void)
     lv_obj_set_flex_align(ui_ScreenHome, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
     lv_obj_set_flex_flow(ui_ScreenHome, LV_FLEX_FLOW_ROW);
     lv_obj_set_style_pad_column(ui_ScreenHome, 0, 0);
+
     // left panel in this screen
     lv_obj_t * ui_ScreenHome_PanelFunc = lv_obj_create(ui_ScreenHome);
     lv_obj_set_style_border_width(ui_ScreenHome_PanelFunc, 2, 0);
@@ -422,7 +426,7 @@ lv_obj_t * ui_screen_home_init(void)
     lv_obj_set_style_border_width(ui_ScreenHome_PanelDisp, 0, 0);
     lv_obj_set_style_radius(ui_ScreenHome_PanelDisp, 0, 0);
     lv_obj_set_style_bg_color(ui_ScreenHome_PanelDisp, lv_color_hex(0x1F1F1F), 0);
-    // lv_obj_set_style_bg_opa(ui_ScreenHome_PanelDisp, 0, 0);
+    lv_obj_set_style_pad_left(ui_ScreenHome_PanelDisp, 50, 0);
     lv_obj_set_height(ui_ScreenHome_PanelDisp, LV_VER_RES);
     lv_obj_set_flex_grow(ui_ScreenHome_PanelDisp, ui_panel_disp_grow);
 
@@ -436,12 +440,11 @@ lv_obj_t * ui_screen_home_init(void)
     lv_obj_set_style_line_dash_gap(ui_ScreenHome_PanelDisp_ChartDisp, 6, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_size(ui_ScreenHome_PanelDisp_ChartDisp, 0, LV_PART_INDICATOR | LV_STATE_DEFAULT);
     lv_obj_set_style_line_color(ui_ScreenHome_PanelDisp_ChartDisp, lv_color_hex(0xFFFFFF), LV_PART_TICKS | LV_STATE_DEFAULT);
-    lv_obj_set_size(ui_ScreenHome_PanelDisp_ChartDisp, CHART_WIDTH, CHART_HEIGHT);
+    lv_obj_set_height(ui_ScreenHome_PanelDisp_ChartDisp, CHART_HEIGHT);
     lv_obj_align(ui_ScreenHome_PanelDisp_ChartDisp, LV_ALIGN_RIGHT_MID, 0, -20);
     lv_chart_set_point_count(ui_ScreenHome_PanelDisp_ChartDisp, CHART_POINTS_COUNT);
     // lv_chart_set_zoom_x(ui_ScreenHome_PanelDisp_ChartDisp, 256 * 2);
     lv_chart_set_div_line_count(ui_ScreenHome_PanelDisp_ChartDisp, 6, 6);
-    // lv_chart_set_range(ui_ScreenHome_PanelDisp_ChartDisp, LV_CHART_AXIS_PRIMARY_Y, -120, 120);
     chart_cursor.cursor1 = lv_chart_add_cursor(ui_ScreenHome_PanelDisp_ChartDisp, lv_palette_main(LV_PALETTE_YELLOW), LV_DIR_LEFT | LV_DIR_BOTTOM);
     chart_cursor.cursor2 = lv_chart_add_cursor(ui_ScreenHome_PanelDisp_ChartDisp, lv_palette_main(LV_PALETTE_YELLOW), LV_DIR_LEFT | LV_DIR_BOTTOM);
 
@@ -485,7 +488,7 @@ lv_obj_t * ui_screen_home_init(void)
     lv_obj_set_style_text_font(ui_ScreenHome_PanelDisp_KbNumpad, &lv_font_montserrat_18, LV_PART_ITEMS | LV_STATE_DEFAULT);
 
     // disp data show area
-    lv_obj_t * ui_ScreenHome_PanelDisp_PanelData = lv_obj_create(ui_ScreenHome_PanelDisp);
+    ui_ScreenHome_PanelDisp_PanelData = lv_obj_create(ui_ScreenHome_PanelDisp);
     lv_obj_t * ui_ScreenHome_PanelDisp_PanelData_PanelWindow = lv_obj_create(ui_ScreenHome_PanelDisp_PanelData);
     lv_obj_t * ui_ScreenHome_PanelDisp_PanelData_PanelSelect = lv_obj_create(ui_ScreenHome_PanelDisp_PanelData);
     // disp data panel
@@ -555,7 +558,7 @@ lv_obj_t * ui_screen_home_init(void)
         }   
     }
     //disp top option area
-    lv_obj_t * ui_ScreenHome_PanelDisp_PanelOption = lv_obj_create(ui_ScreenHome_PanelDisp);
+    ui_ScreenHome_PanelDisp_PanelOption = lv_obj_create(ui_ScreenHome_PanelDisp);
     lv_obj_set_style_border_width(ui_ScreenHome_PanelDisp_PanelOption, 0, 0);
     lv_obj_set_style_bg_opa(ui_ScreenHome_PanelDisp_PanelOption, 0, 0);
     lv_obj_clear_flag(ui_ScreenHome_PanelDisp_PanelOption, LV_OBJ_FLAG_SCROLLABLE);
@@ -639,6 +642,18 @@ lv_obj_t * ui_screen_home_init(void)
     lv_obj_set_style_text_color(ui_ScreenHome_PanelFunc_PanelMode_PanelOutput_LabelTitle, lv_color_hex(0xFFFFFF), 0);
     lv_obj_set_style_text_color(ui_ScreenHome_PanelFunc_PanelMode_DropdownMode, lv_color_hex(0xFFFFFF), 0);
 
+    lv_obj_t * ui_ScreenHome_PanelDisp_Buttonshift = lv_btn_create(ui_ScreenHome_PanelDisp);
+    lv_obj_align(ui_ScreenHome_PanelDisp_Buttonshift, LV_ALIGN_BOTTOM_RIGHT, -50, -120);
+    lv_obj_set_size(ui_ScreenHome_PanelDisp_Buttonshift, 70, 70);
+    lv_obj_set_style_radius(ui_ScreenHome_PanelDisp_Buttonshift, 300, 0);
+    lv_obj_set_style_bg_color(ui_ScreenHome_PanelDisp_Buttonshift, lv_color_hex(0xFFFFFF), 0);
+    lv_obj_set_style_bg_opa(ui_ScreenHome_PanelDisp_Buttonshift, LV_OPA_10, 0);
+    lv_obj_add_flag(ui_ScreenHome_PanelDisp_Buttonshift, LV_OBJ_FLAG_CHECKABLE);
+    lv_obj_set_style_shadow_width(ui_ScreenHome_PanelDisp_Buttonshift, 0, 0);
+    lv_obj_set_style_bg_color(ui_ScreenHome_PanelDisp_Buttonshift, lv_color_hex(0xFFFFFF), LV_PART_MAIN | LV_STATE_CHECKED);
+    lv_obj_set_style_bg_opa(ui_ScreenHome_PanelDisp_Buttonshift, LV_OPA_30, LV_PART_MAIN | LV_STATE_CHECKED);
+
+    lv_obj_add_event_cb(ui_ScreenHome_PanelDisp_Buttonshift, ui_event_Buttonshift_cb, LV_EVENT_ALL, ui_ScreenHome_PanelFunc);
     lv_obj_add_event_cb(ui_ScreenHome, ui_event_screen_home_cb, LV_EVENT_ALL, ui_ScreenHome_PanelDisp_ChartDisp);
     lv_obj_add_event_cb(ui_ScreenHome_PanelFunc_PanelMode_SliderVsup, ui_event_slider_voltage_cb, LV_EVENT_VALUE_CHANGED, ui_ScreenHome_PanelFunc_PanelMode_PanelVsup_TextareaVsup);
     lv_obj_add_event_cb(ui_ScreenHome_PanelFunc_PanelParam_SliderFreq, ui_event_slider_samp_freq_cb, LV_EVENT_VALUE_CHANGED, ui_ScreenHome_PanelFunc_PanelParam_LabelSubtitle1);
@@ -656,7 +671,6 @@ lv_obj_t * ui_screen_home_init(void)
 /**********************
  *   STATIC FUNCTIONS
  **********************/
-
 static void generate_sine_wave(lv_coord_t *g_chart_y_points) 
 {
     for (int i = 0; i < CHART_POINTS_COUNT; i++) {
@@ -731,16 +745,46 @@ static void format_textarea_string(int min_value, int max_value, char * input_st
     snprintf(input_str, buf_size, "%d", value);
 }
 
+static int convert_width_to_point_id(lv_coord_t width)
+{
+    lv_coord_t chart_width = lv_obj_get_width(ui_ScreenHome_PanelDisp_ChartDisp);
+    int point_count = lv_chart_get_point_count(ui_ScreenHome_PanelDisp_ChartDisp);
+    int point_id_range = width * point_count / chart_width;
+    // printf("%d %d %d %d\n", width, point_count, chart_width, point_id_range);
+    point_id_range = point_id_range < 1 ? 1 : point_id_range;
+    return point_id_range;
+}
+
 static uint8_t detect_touch_cursor(int32_t pos_id, lv_chart_cursor_t * cursor1, lv_chart_cursor_t * cursor2)
 {
     int32_t interval1 = abs(pos_id - cursor1->point_id);
     int32_t interval2 = abs(pos_id - cursor2->point_id);
-    if (interval2 <=  10) {
+    int point_id_range = convert_width_to_point_id(15);
+    if (interval2 <=  point_id_range) {
         return 2;
-    } else if (interval1 <=  10) {
+    } else if (interval1 <=  point_id_range) {
         return 1;
     }
     return 0;
+}
+
+static void ui_event_Buttonshift_cb(lv_event_t * e)
+{
+    lv_event_code_t code = lv_event_get_code(e);
+    lv_obj_t * btn = lv_event_get_target(e);
+    lv_obj_t * panel = lv_event_get_user_data(e);
+    if (code == LV_EVENT_CLICKED) {
+        if (lv_obj_has_state(btn, LV_STATE_CHECKED)) {
+            lv_obj_add_flag(panel, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_width(ui_ScreenHome_PanelDisp_PanelData, LV_HOR_RES - 45);
+            lv_obj_set_width(ui_ScreenHome_PanelDisp_PanelOption, LV_HOR_RES - 45);
+        } else {
+            lv_obj_clear_flag(panel, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_set_width(ui_ScreenHome_PanelDisp_PanelData, CHART_WIDTH);
+            lv_obj_set_width(ui_ScreenHome_PanelDisp_PanelOption, CHART_WIDTH);
+            // lv_obj_set_width(ui_ScreenHome_PanelDisp_ChartDisp, CHART_WIDTH);
+        }
+    }
 }
 
 static void ui_event_chart_cb(lv_event_t * e)
@@ -965,7 +1009,6 @@ static void ui_event_button_start_cb(lv_event_t * e)
 {
     lv_obj_t * button = lv_event_get_target(e);
     lv_obj_t * button_mark = lv_event_get_user_data(e);
-    printf("current state is %d\n", lv_obj_get_state(button));
     if (lv_obj_has_state(button, LV_STATE_CHECKED))
         lv_label_set_text(button_mark, "STOP");
     else lv_label_set_text(button_mark, "START");
@@ -977,5 +1020,4 @@ static void ui_event_switch_locky_cb(lv_event_t * e)
     if (lv_obj_has_state(obj, LV_STATE_CHECKED))
         chart_y_axis_lock = true;
     else chart_y_axis_lock = false;
-    printf("y_lock flag: %d\n", chart_y_axis_lock);
 }
