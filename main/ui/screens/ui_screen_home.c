@@ -842,49 +842,70 @@ static void ui_event_chart_cb(lv_event_t * e)
         uint16_t point_count = lv_chart_get_point_count(chart);
         id1 = (id1 + start_id) %  point_count;
         id2 = (id2 + start_id) %  point_count;
-
         if(dsc->p1 == NULL || dsc->p2 == NULL || dsc->p1->y != dsc->p2->y || id1 < 0 || id2 < 0) return;
-
+        // printf("x1:%d y1:%d x2:%d y2:%d\n", dsc->p1->x, dsc->p1->y, dsc->p2->x, dsc->p2->y);
         float v1 = data_array[id1] / (float)10;
         float v2 = data_array[id2] / (float)10;
-
         char buf1[10], buf2[10];
         snprintf(buf1, sizeof(buf1), "%3.1f mA", v1);
         snprintf(buf2, sizeof(buf2), "%3.1f mA", v2);
 
-        lv_point_t size1, size2;
-        lv_txt_get_size(&size1, buf1, LV_FONT_DEFAULT, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
-        lv_txt_get_size(&size2, buf2, LV_FONT_DEFAULT, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        lv_point_t size;
+        lv_txt_get_size(&size, (index == 0) ? buf1 : buf2, LV_FONT_DEFAULT, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+        lv_area_t a;
+        a.y2 = dsc->p1->y - 5;
+        a.y1 = a.y2 - size.y - 10;
+        a.x1 = dsc->p1->x + 10;
+        a.x2 = a.x1 + size.x + 10;
 
-        lv_area_t a1,a2;
-        a1.y2 = dsc->p1->y - 5;
-        a1.y1 = a1.y2 - size1.y - 10;
-        a1.x1 = dsc->p1->x + 10;
-        a1.x2 = a1.x1 + size1.x + 10;
-        a2.y2 = dsc->p1->y - 5;
-        a2.y1 = a2.y2 - size2.y - 10;
-        a2.x1 = dsc->p1->x + 10;
-        a2.x2 = a2.x1 + size2.x + 10;
-
+        // Draw the rectangle for the cursor
         lv_draw_rect_dsc_t draw_rect_dsc;
         lv_draw_rect_dsc_init(&draw_rect_dsc);
         draw_rect_dsc.bg_color = lv_palette_main(LV_PALETTE_BLUE);
         draw_rect_dsc.radius = 3;
+        lv_draw_rect(dsc->draw_ctx, &draw_rect_dsc, &a);
 
-        lv_area_t *cursor_area = (index == 0) ? &a1 : &a2;
-        const char *cursor_text = (index == 0) ? buf1 : buf2;
-        // Draw the rectangle for the cursor
-        lv_draw_rect(dsc->draw_ctx, &draw_rect_dsc, cursor_area);
-
+        // Draw the label for the cursor
         lv_draw_label_dsc_t draw_label_dsc;
         lv_draw_label_dsc_init(&draw_label_dsc);
         draw_label_dsc.color = lv_color_white();
-        cursor_area->x1 += 5;
-        cursor_area->x2 -= 5;
-        cursor_area->y1 += 5;
-        cursor_area->y2 -= 5;
-        // Draw the label for the cursor
-        lv_draw_label(dsc->draw_ctx, &draw_label_dsc, cursor_area, cursor_text, NULL);
+        a.x1 += 5;
+        a.x2 -= 5;
+        a.y1 += 5;
+        a.y2 -= 5;
+        lv_draw_label(dsc->draw_ctx, &draw_label_dsc, &a, (index == 0) ? buf1 : buf2, NULL);
+
+        // Draw the cursor interval between two cursors
+        static lv_point_t point1, point2;
+        char buf3[12];
+        snprintf(buf3, sizeof(buf3), "%d", abs(id1 - id2));
+        if (index == 0) {
+            point1.x = dsc->p2->x;
+            point1.y = 300;
+        } else {
+            point2.x = dsc->p2->x;
+            point2.y = 300;
+        }
+        lv_draw_line_dsc_t draw_interval_dsc;
+        lv_draw_line_dsc_init(&draw_interval_dsc);
+        draw_interval_dsc.color = lv_palette_main(LV_PALETTE_BLUE);
+        draw_interval_dsc.width = 3;
+
+        lv_point_t interval_label_size;
+        lv_txt_get_size(&interval_label_size, buf3, LV_FONT_DEFAULT, 0, 0, LV_COORD_MAX, LV_TEXT_FLAG_NONE);
+
+        lv_draw_label_dsc_t draw_interval_label_dsc;
+        lv_draw_label_dsc_init(&draw_interval_label_dsc);
+        draw_interval_label_dsc.color = lv_color_white();
+
+        if (index == 1 && point1.x && point2.x) {
+            a.x1 = (abs(point1.x + point2.x)) / 2 - interval_label_size.x / 2;
+            a.x2 = (abs(point1.x + point2.x)) / 2 + interval_label_size.x / 2;
+            a.y2 = point1.y - 5;
+            a.y1 = a.y2 - interval_label_size.y;
+            lv_draw_line(dsc->draw_ctx, &draw_interval_dsc, &point1, &point2);
+            lv_draw_label(dsc->draw_ctx, &draw_interval_label_dsc, &a, buf3, NULL);
+        }
 
         // Update the index for the next cursor
         index = (index + 1) % 2;
